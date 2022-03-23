@@ -79,7 +79,7 @@ namespace EtwToPprof
       if (timestamp < options.timeStart || timestamp > options.timeEnd)
         return;
 
-      if (options.processFilterSet?.Count != 0)
+      if (options.processFilterSet != null && options.processFilterSet.Count > 0)
       {
         var processImage = sample.Process.Images.FirstOrDefault(
             image => image.FileName == sample.Process.ImageName);
