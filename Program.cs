@@ -88,6 +88,10 @@ namespace EtwToPprof
 
       [Option("loadSymbols", Required = false, Default = true, HelpText = "Whether symbols should be loaded.")]
       public bool? loadSymbols { get; set; }
+
+      [Option("loadFromSymCache", Required = false, Default = false,
+             HelpText = "Loads symbols from cache where processed symbols are stored.")]
+      public bool loadFromSymCache { get; set; }
     }
 
     static void Main(string[] args)
@@ -104,7 +108,7 @@ namespace EtwToPprof
 
         trace.Process();
 
-        if (opts.loadSymbols ?? true)
+        if (!opts.loadFromSymCache && (opts.loadSymbols ?? true))
         {
           ISymbolDataSource symbolData = pendingSymbolData.Result;
           var symbolProgress = new Progress<SymbolLoadingProgress>(progress =>
@@ -118,6 +122,13 @@ namespace EtwToPprof
           symbolData.LoadSymbolsAsync(
               SymCachePath.Automatic, SymbolPath.Automatic, symbolProgress)
               .GetAwaiter().GetResult();
+          Console.WriteLine();
+        }
+
+        if (opts.loadFromSymCache && (opts.loadSymbols ?? true))
+        {
+          var symbolData = pendingSymbolData.Result;
+          symbolData.LoadSymbolsForConsoleAsync(SymCachePath.Automatic).GetAwaiter().GetResult();
           Console.WriteLine();
         }
 

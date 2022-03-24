@@ -79,12 +79,19 @@ namespace EtwToPprof
       if (timestamp < options.timeStart || timestamp > options.timeEnd)
         return;
 
+      if (sample.Process == null)
+        return;
+
       if (options.processFilterSet != null && options.processFilterSet.Count > 0)
       {
         var processImage = sample.Process.Images.FirstOrDefault(
             image => image.FileName == sample.Process.ImageName);
 
         string imagePath = processImage?.Path ?? sample.Process.ImageName;
+
+        // In some rare cases sample.Process.ImageName can also be empty.
+        if (string.IsNullOrEmpty(imagePath))
+          return;
 
         if (!options.processFilterSet.Any(filter => imagePath.Contains(filter.Replace("/", "\\"))))
           return;
