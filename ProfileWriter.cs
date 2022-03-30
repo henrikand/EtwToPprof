@@ -46,27 +46,27 @@ namespace EtwToPprof
 
     public ProfileWriter(Options options)
     {
-      this.options = options;
+      this._options = options;
 
-      stripSourceFileNamePrefixRegex = new Regex(options.stripSourceFileNamePrefix,
-                                                 RegexOptions.Compiled | RegexOptions.IgnoreCase);
+      _stripSourceFileNamePrefixRegex = new Regex(_options.stripSourceFileNamePrefix,
+                                                  RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-      profile = new pb.Profile();
-      profile.StringTable.Add("");
-      strings = new Dictionary<string, long>();
-      strings.Add("", 0);
-      nextStringId = 1;
+      _profile = new pb.Profile();
+      _profile.StringTable.Add("");
+      _strings = new Dictionary<string, long>();
+      _strings.Add("", 0);
+      _nextStringId = 1;
 
       var cpuTimeValueType = new pb.ValueType();
       cpuTimeValueType.Type = GetStringId("cpu");
       cpuTimeValueType.Unit = GetStringId("nanoseconds");
-      profile.SampleType.Add(cpuTimeValueType);
+      _profile.SampleType.Add(cpuTimeValueType);
 
-      locations = new Dictionary<Location, ulong>();
-      nextLocationId = 1;
+      _locations = new Dictionary<Location, ulong>();
+      _nextLocationId = 1;
 
-      functions = new Dictionary<Function, ulong>();
-      nextFunctionId = 1;
+      _functions = new Dictionary<Function, ulong>();
+      _nextFunctionId = 1;
     }
 
     public void AddSample(ICpuSample sample)
@@ -76,13 +76,13 @@ namespace EtwToPprof
         return;
 
       var timestamp = sample.Timestamp.RelativeTimestamp.TotalSeconds;
-      if (timestamp < options.timeStart || timestamp > options.timeEnd)
+      if (timestamp < _options.timeStart || timestamp > _options.timeEnd)
         return;
 
       if (sample.Process == null)
         return;
 
-      if (options.processFilterSet != null && options.processFilterSet.Count > 0)
+      if (_options.processFilterSet != null && _options.processFilterSet.Count > 0)
       {
         var processImage = sample.Process.Images.FirstOrDefault(
             image => image.FileName == sample.Process.ImageName);
@@ -93,12 +93,12 @@ namespace EtwToPprof
         if (string.IsNullOrEmpty(imagePath))
           return;
 
-        if (!options.processFilterSet.Any(filter => imagePath.Contains(filter.Replace("/", "\\"))))
+        if (!_options.processFilterSet.Any(filter => imagePath.Contains(filter.Replace("/", "\\"))))
           return;
       }
 
-      wallTimeStart = Math.Min(wallTimeStart, timestamp);
-      wallTimeEnd = Math.Max(wallTimeEnd, timestamp);
+      _wallTimeStart = Math.Min(_wallTimeStart, timestamp);
+      _wallTimeEnd = Math.Max(_wallTimeEnd, timestamp);
 
       var sampleProto = new pb.Sample();
       sampleProto.Value.Add(sample.Weight.Nanoseconds);
@@ -123,7 +123,7 @@ namespace EtwToPprof
         string threadLabel = sample.Thread?.Name;
         if (threadLabel == null || threadLabel == "")
           threadLabel = "anonymous thread";
-        if (options.includeProcessAndThreadIds)
+        if (_options.includeProcessAndThreadIds)
         {
           threadLabel = String.Format("{0} ({1})", threadLabel, sample.Thread?.Id ?? 0);
         }
@@ -131,7 +131,7 @@ namespace EtwToPprof
           GetPseudoLocationId(processId, processName, sample.Thread?.StartAddress, threadLabel));
 
         string processLabel = processName;
-        if (options.splitChromeProcesses && processName == "chrome.exe" &&
+        if (_options.splitChromeProcesses && processName == "chrome.exe" &&
             sample.Process.CommandLine != null)
         {
           var commandLineSplit = sample.Process.CommandLine.Split();
@@ -159,16 +159,16 @@ namespace EtwToPprof
             }
           }
         }
-        if (options.includeProcessIds || options.includeProcessAndThreadIds)
+        if (_options.includeProcessIds || _options.includeProcessAndThreadIds)
         {
           processLabel = processLabel + $" ({processId})";
         }
         sampleProto.LocationId.Add(
           GetPseudoLocationId(processId, processName, sample.Process.ObjectAddress, processLabel));
 
-        if (processThreadCpuTimes.ContainsKey(processLabel))
+        if (_processThreadCpuTimes.ContainsKey(processLabel))
         {
-          Dictionary<string, decimal> threadCpuTimes = processThreadCpuTimes[processLabel];
+          Dictionary<string, decimal> threadCpuTimes = _processThreadCpuTimes[processLabel];
           if (threadCpuTimes.ContainsKey(threadLabel))
           {
             threadCpuTimes[threadLabel] += sample.Weight.TotalMilliseconds;
@@ -180,43 +180,43 @@ namespace EtwToPprof
         }
         else
         {
-          processThreadCpuTimes[processLabel] = new Dictionary<string, decimal>();
-          processThreadCpuTimes[processLabel][threadLabel] = sample.Weight.TotalMilliseconds;
+          _processThreadCpuTimes[processLabel] = new Dictionary<string, decimal>();
+          _processThreadCpuTimes[processLabel][threadLabel] = sample.Weight.TotalMilliseconds;
         }
 
-        if (processCpuTimes.ContainsKey(processLabel))
+        if (_processCpuTimes.ContainsKey(processLabel))
         {
-          processCpuTimes[processLabel] += sample.Weight.TotalMilliseconds;
+          _processCpuTimes[processLabel] += sample.Weight.TotalMilliseconds;
         }
         else
         {
-          processCpuTimes[processLabel] = sample.Weight.TotalMilliseconds;
+          _processCpuTimes[processLabel] = sample.Weight.TotalMilliseconds;
         }
 
-        totalCpuTime += sample.Weight.TotalMilliseconds;
+        _totalCpuTime += sample.Weight.TotalMilliseconds;
       }
 
-      profile.Sample.Add(sampleProto);
+      _profile.Sample.Add(sampleProto);
     }
 
     public long Write(string outputFileName)
     {
-      profile.Comment.Add(GetStringId($"Converted by EtwToPprof from {Path.GetFileName(options.etlFileName)}"));
-      if (wallTimeStart < wallTimeEnd)
+      _profile.Comment.Add(GetStringId($"Converted by EtwToPprof from {Path.GetFileName(_options.etlFileName)}"));
+      if (_wallTimeStart < _wallTimeEnd)
       {
-        decimal wallTimeMs = (wallTimeEnd - wallTimeStart) * 1000;
-        profile.Comment.Add(GetStringId($"Wall time {wallTimeMs:F} ms"));
-        profile.Comment.Add(GetStringId($"CPU time {totalCpuTime:F} ms ({totalCpuTime / wallTimeMs:P})"));
+        decimal wallTimeMs = (_wallTimeEnd - _wallTimeStart) * 1000;
+        _profile.Comment.Add(GetStringId($"Wall time {wallTimeMs:F} ms"));
+        _profile.Comment.Add(GetStringId($"CPU time {_totalCpuTime:F} ms ({_totalCpuTime / wallTimeMs:P})"));
 
-        var sortedProcesses = processCpuTimes.Keys.ToList();
-        sortedProcesses.Sort((a, b) => -processCpuTimes[a].CompareTo(processCpuTimes[b]));
+        var sortedProcesses = _processCpuTimes.Keys.ToList();
+        sortedProcesses.Sort((a, b) => -_processCpuTimes[a].CompareTo(_processCpuTimes[b]));
 
         foreach (var processLabel in sortedProcesses)
         {
-          decimal processCpuTime = processCpuTimes[processLabel];
-          profile.Comment.Add(GetStringId($"  {processLabel} {processCpuTime:F} ms ({processCpuTime / wallTimeMs:P})"));
+          decimal processCpuTime = _processCpuTimes[processLabel];
+          _profile.Comment.Add(GetStringId($"  {processLabel} {processCpuTime:F} ms ({processCpuTime / wallTimeMs:P})"));
 
-          var threadCpuTimes = processThreadCpuTimes[processLabel];
+          var threadCpuTimes = _processThreadCpuTimes[processLabel];
 
           var sortedThreads = threadCpuTimes.Keys.ToList();
           sortedThreads.Sort((a, b) => -threadCpuTimes[a].CompareTo(threadCpuTimes[b]));
@@ -224,13 +224,13 @@ namespace EtwToPprof
           foreach (var threadLabel in sortedThreads)
           {
             var threadCpuTime = threadCpuTimes[threadLabel];
-            profile.Comment.Add(GetStringId($"    {threadLabel} {threadCpuTime:F} ms ({threadCpuTime / wallTimeMs:P})"));
+            _profile.Comment.Add(GetStringId($"    {threadLabel} {threadCpuTime:F} ms ({threadCpuTime / wallTimeMs:P})"));
           }
         }
       }
       else
       {
-        profile.Comment.Add(GetStringId("No samples exported"));
+        _profile.Comment.Add(GetStringId("No samples exported"));
       }
       using (FileStream output = File.Create(outputFileName))
       {
@@ -238,7 +238,7 @@ namespace EtwToPprof
         {
           using (CodedOutputStream serialized = new CodedOutputStream(gzip))
           {
-            profile.WriteTo(serialized);
+            _profile.WriteTo(serialized);
             return output.Length;
           }
         }
@@ -278,10 +278,10 @@ namespace EtwToPprof
     {
       var location = new Location(processId, imageName, address, label);
       ulong locationId;
-      if (!locations.TryGetValue(location, out locationId))
+      if (!_locations.TryGetValue(location, out locationId))
       {
-        locationId = nextLocationId++;
-        locations.Add(location, locationId);
+        locationId = _nextLocationId++;
+        _locations.Add(location, locationId);
 
         var locationProto = new pb.Location();
         locationProto.Id = locationId;
@@ -290,7 +290,7 @@ namespace EtwToPprof
         line.FunctionId = GetFunctionId(imageName, label);
         locationProto.Line.Add(line);
 
-        profile.Location.Add(locationProto);
+        _profile.Location.Add(locationProto);
       }
       return locationId;
     }
@@ -306,16 +306,16 @@ namespace EtwToPprof
       var location = new Location(processId, imagePath, functionAddress, functionName);
 
       ulong locationId;
-      if (!locations.TryGetValue(location, out locationId))
+      if (!_locations.TryGetValue(location, out locationId))
       {
-        locationId = nextLocationId++;
-        locations.Add(location, locationId);
+        locationId = _nextLocationId++;
+        _locations.Add(location, locationId);
 
         var locationProto = new pb.Location();
         locationProto.Id = locationId;
 
         pb.Line line;
-        if (options.includeInlinedFunctions && stackSymbol.InlinedFunctionNames != null)
+        if (_options.includeInlinedFunctions && stackSymbol.InlinedFunctionNames != null)
         {
           foreach (var inlineFunctionName in stackSymbol.InlinedFunctionNames)
           {
@@ -329,7 +329,7 @@ namespace EtwToPprof
         line.Line_ = stackSymbol.SourceLineNumber;
         locationProto.Line.Add(line);
 
-        profile.Location.Add(locationProto);
+        _profile.Location.Add(locationProto);
       }
       return locationId;
     }
@@ -364,10 +364,10 @@ namespace EtwToPprof
     {
       ulong functionId;
       var function = new Function(imageName, functionName);
-      if (!functions.TryGetValue(function, out functionId))
+      if (!_functions.TryGetValue(function, out functionId))
       {
         var functionProto = new pb.Function();
-        functionProto.Id = nextFunctionId++;
+        functionProto.Id = _nextFunctionId++;
         functionProto.Name = GetStringId(functionName ?? function.ToString());
         functionProto.SystemName = GetStringId(function.ToString());
         if (sourceFileName == null)
@@ -377,13 +377,13 @@ namespace EtwToPprof
         else
         {
           sourceFileName = sourceFileName.Replace('\\', '/');
-          sourceFileName = stripSourceFileNamePrefixRegex.Replace(sourceFileName, "");
+          sourceFileName = _stripSourceFileNamePrefixRegex.Replace(sourceFileName, "");
         }
         functionProto.Filename = GetStringId(sourceFileName);
 
         functionId = functionProto.Id;
-        functions.Add(function, functionId);
-        profile.Function.Add(functionProto);
+        _functions.Add(function, functionId);
+        _profile.Function.Add(functionProto);
       }
       return functionId;
     }
@@ -391,35 +391,35 @@ namespace EtwToPprof
     long GetStringId(string str)
     {
       long stringId;
-      if (!strings.TryGetValue(str, out stringId))
+      if (!_strings.TryGetValue(str, out stringId))
       {
-        stringId = nextStringId++;
-        strings.Add(str, stringId);
-        profile.StringTable.Add(str);
+        stringId = _nextStringId++;
+        _strings.Add(str, stringId);
+        _profile.StringTable.Add(str);
       }
       return stringId;
     }
 
-    private readonly Options options;
+    private readonly Options _options;
 
-    Dictionary<Location, ulong> locations;
-    ulong nextLocationId;
+    Dictionary<Location, ulong> _locations;
+    ulong _nextLocationId;
 
-    Dictionary<Function, ulong> functions;
-    ulong nextFunctionId;
+    Dictionary<Function, ulong> _functions;
+    ulong _nextFunctionId;
 
-    Dictionary<string, long> strings;
-    long nextStringId;
+    Dictionary<string, long> _strings;
+    long _nextStringId;
 
-    Regex stripSourceFileNamePrefixRegex;
+    Regex _stripSourceFileNamePrefixRegex;
 
-    decimal wallTimeStart = decimal.MaxValue;
-    decimal wallTimeEnd = 0;
+    decimal _wallTimeStart = decimal.MaxValue;
+    decimal _wallTimeEnd = 0;
 
-    decimal totalCpuTime = 0;
-    Dictionary<string, decimal> processCpuTimes = new Dictionary<string, decimal>();
-    Dictionary<string, Dictionary<string, decimal>> processThreadCpuTimes = new Dictionary<string, Dictionary<string, decimal>>();
+    decimal _totalCpuTime = 0;
+    Dictionary<string, decimal> _processCpuTimes = new Dictionary<string, decimal>();
+    Dictionary<string, Dictionary<string, decimal>> _processThreadCpuTimes = new Dictionary<string, Dictionary<string, decimal>>();
 
-    pb.Profile profile;
+    pb.Profile _profile;
   }
 }
