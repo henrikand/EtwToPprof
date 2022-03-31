@@ -58,6 +58,10 @@ namespace EtwToPprof
                          + "All processes will be exported if set to *.")]
       public string processFilter { get; set; }
 
+      [Option("processIdFilter", Required = false, Default = null,
+              HelpText = "Include only this process id in the exported profile.")]
+      public decimal? processIdFilter { get; set; }
+
       [Option("includeInlinedFunctions", Required = false, Default = false,
               HelpText = "Whether inlined functions should be included in the exported profile (slow).")]
       public bool includeInlinedFunctions { get; set; }
@@ -143,6 +147,7 @@ namespace EtwToPprof
         profileOpts.stripSourceFileNamePrefix = opts.stripSourceFileNamePrefix;
         profileOpts.timeStart = opts.timeStart ?? 0;
         profileOpts.timeEnd = opts.timeEnd ?? decimal.MaxValue;
+        profileOpts.processIdFilter = opts.processIdFilter;
 
         var exportAllProcesses = opts.processFilter == "*";
         if (!exportAllProcesses)

@@ -42,6 +42,7 @@ namespace EtwToPprof
       public decimal timeStart { get; set; }
       public decimal timeEnd { get; set; }
       public HashSet<string> processFilterSet { get; set; }
+      public decimal? processIdFilter { get; set; }
     }
 
     public ProfileWriter(Options options)
@@ -95,6 +96,12 @@ namespace EtwToPprof
 
         if (!_options.processFilterSet.Any(filter => imagePath.Contains(filter.Replace("/", "\\"))))
           return;
+      }
+
+      // If a PID filter has been set, only allow one specific PID to pass.
+      if (_options.processIdFilter.HasValue &&
+          _options.processIdFilter.Value != sample.Process.Id) {
+        return;
       }
 
       _wallTimeStart = Math.Min(_wallTimeStart, timestamp);
